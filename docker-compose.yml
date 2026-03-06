@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  # Service untuk tracking server
+  mlflow-server:
+    image: ghcr.io/mlflow/mlflow:v2.10.0
+    ports:
+      - "5000:5000"
+    command: mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0

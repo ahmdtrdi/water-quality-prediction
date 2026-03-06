@@ -1,0 +1,37 @@
+project:
+  name: "new_ml_project"
+  version: "0.0.1"
+
+paths:
+  # Path relatif dari root project
+  raw_data: "data/01-raw/dataset.csv"
+  processed_data: "data/02-preprocessed/"
+  artifacts: "models/artifacts/"
+
+schema:
+  target: "target_variable" 
+  
+  drop_cols: 
+    - "id"
+    - "uuid"
+  
+  features_numeric: [] 
+  features_categorical: []  
+
+pipeline:
+  feature_engineering:
+    enable: true
+
+  preprocessing:
+    enable: true
+    
+    imputation:
+      numeric: "median"        # mean, median, constant
+      categorical: "most_frequent" # most_frequent, constant
+    
+    scaling:
+      enable: true
+      method: "standard" # standard, minmax, robust
+    
+    encoding:
+      method: "onehot" # onehot, ordinal

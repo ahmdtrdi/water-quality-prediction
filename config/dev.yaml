@@ -1,0 +1,11 @@
+mode: "development"
+
+paths:
+  raw_data: "data/01-raw/data_sample.csv"       # Bisa pakai data sample kecil
+  processed_data: "data/02-preprocessed/"
+  artifacts_dir: "models/dev/"                  # Simpan model di folder dev
+  logs: "logs/dev.log"
+
+mlflow:
+  tracking_uri: "http://localhost:5000"
+  experiment_name: "dev_experiment_v1"

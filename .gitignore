@@ -1,0 +1,17 @@
+# Python artifacts
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Data
+data/
+!data/**/*.gitkeep
+
+# Models
+models/*.pkl
+
+# Environment & Config local
+.env
+.ipynb_checkpoints/
+mlruns/
+.pytest_cache/

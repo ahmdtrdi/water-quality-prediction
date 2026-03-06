@@ -1,0 +1,11 @@
+mode: "production"
+
+paths:
+  raw_data: "/mnt/data/full_dataset"  
+  processed_data: "gs://my-bucket/processed/"
+  artifacts_dir: "/opt/ml/models/prod/"
+  logs: "/var/log/ml_app.log"
+
+mlflow:
+  tracking_uri: "http://mlflow-server.internal:5000"
+  experiment_name: "prod_risk_model"

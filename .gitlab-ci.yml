@@ -1,0 +1,22 @@
+stages:
+  - test
+  - build
+
+run_unit_tests:
+  stage: test
+  image: python:3.9-slim
+  before_script:
+    - pip install -r requirements.txt
+    - pip install -e .
+  script:
+    - pytest tests/
+
+build_docker_image:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker build -t my-mlops-project .
+  only:
+    - main
