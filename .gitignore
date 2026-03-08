@@ -16,3 +16,6 @@ models/*.pkl
 mlruns/
 .pytest_cache/
 .DS_Store
+data/raw/*.csv
+data/external/*.csv
+data/processed/*.csv
