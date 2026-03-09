@@ -97,3 +97,8 @@ DESCRIBE INTEGRATION CUSTOM_EXTERNAL_ACCESS;
 
 select 'https://www.snowflake.com/en/developers/guides/ey-ai-and-data-challenge/#create-new-workspace-from-git-repo' 
         as "Next Step: Click link below to return to Developer Guide, for instructions to create a Workspace from Git repo";        
+
+USE DATABASE SNOWFLAKE_LEARNING_DB;
+USE SCHEMA PUBLIC;
+
+LIST @EXTERNAL_DATA_STAGE;
