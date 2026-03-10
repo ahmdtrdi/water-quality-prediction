@@ -158,10 +158,8 @@ def _get_loaded_static_layer(layer: str):
         if layer == "worldpop":    return rasterio.open(base + "zaf_pop_2025_CN_100m_R2025A_v1.tif")
         if layer == "sanlc2022":   return rasterio.open(base + "SA_NLC_2022_ALBERS.tif")
         if layer == "sanlc2020":   return rasterio.open(base + "SA_NLC_2020_ALBERS.tif")
-        
-        # PERUBAHAN: Gunakan read_parquet (Jauh lebih cepat dan hemat memori)
-        if layer == "hydroatlas":  return gpd.read_parquet(base + "BasinATLAS_v1.parquet")
-        if layer == "riveratlas":  return gpd.read_parquet(base + "RiverATLAS_v1.parquet")
+        if layer == "hydroatlas":  return gpd.read_parquet(base + "BasinATLAS_v10_lev12.parquet")
+        if layer == "riveratlas":  return gpd.read_parquet(base + "RiverATLAS_Data_v10.parquet")
     except Exception as e:
         print(f"Load error {layer}: {e}")
         return None
@@ -272,7 +270,7 @@ def enrich_dataset_with_external_api(dataframe: pd.DataFrame, latitude_col: str,
     enriched_df['elevation_meters'] = enriched_df.apply(lambda row: fetch_elevation(row[latitude_col], row[longitude_col]), axis=1)
 
     # 2. API: Weather
-    weather_data = enriched_df.apply(lambda row: fetch_historical_weather(row[latitude_col], row[longitude_col],str(row[date_col].date())), axis=1)
+    weather_data = enriched_df.apply(lambda row: fetch_historical_weather(row[latitude_col], row[longitude_col], str(row[date_col])), axis=1)
     enriched_df = pd.concat([enriched_df, pd.DataFrame(weather_data.tolist(), index=enriched_df.index)], axis=1)
 
     # 3. API: SoilGrids
