@@ -1,3 +1,5 @@
+import time
+import os
 import requests
 import pandas as pd
 import numpy as np
@@ -9,14 +11,28 @@ from typing import Dict, Any, Optional
 from datetime import timedelta
 from functools import lru_cache
 
-def _execute_api_get_request(url: str, params: Dict[str, Any], timeout: int = 30) -> Optional[Dict]:
-    try:
-        r = requests.get(url, params=params, timeout=timeout)
-        r.raise_for_status()
-        return r.json()
-    except Exception as e:
-        print(f"API Error: {e}")
-        return None
+def _execute_api_get_request(url: str, params: Dict[str, Any], max_retries: int = 5, backoff_factor: float = 1.0, timeout: int = 60) -> Optional[Dict]:
+    for attempt in range(max_retries):
+        try:
+            r = requests.get(url, params=params, timeout=timeout)
+            r.raise_for_status()
+            return r.json()
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code == 429:
+                wait_time = backoff_factor * (2 ** attempt)
+                print(f"Rate limit hit (429), retrying in {wait_time:.1f}s... (attempt {attempt+1}/{max_retries})")
+                time.sleep(wait_time)
+                continue
+            else:
+                print(f"HTTP Error: {e}")
+                return None
+        except requests.exceptions.RequestException as e:
+            wait_time = backoff_factor * (2 ** attempt)
+            print(f"Request error (e.g., timeout): {e}, retrying in {wait_time:.1f}s... (attempt {attempt+1}/{max_retries})")
+            time.sleep(wait_time)
+            continue
+    print(f"Max retries exceeded for {url}")
+    return None
 
 @lru_cache(maxsize=2048)
 def fetch_elevation(lat: float, lon: float) -> float:
@@ -26,7 +42,7 @@ def fetch_elevation(lat: float, lon: float) -> float:
 @lru_cache(maxsize=2048)
 def fetch_historical_weather(latitude: float, longitude: float, target_date_str: str, time_lag_days: int = 7) -> Dict[str, float]:
     base_url = "https://archive-api.open-meteo.com/v1/archive"
-    target_date = pd.to_datetime(target_date_str)
+    target_date = pd.to_datetime(target_date_str, format='mixed', dayfirst=False)
     
     start_date = (target_date - timedelta(days=time_lag_days)).strftime('%Y-%m-%d')
     end_date = target_date.strftime('%Y-%m-%d')
@@ -262,44 +278,75 @@ def fetch_riveratlas_attributes(latitude: float, longitude: float) -> Dict[str, 
 
 def enrich_dataset_with_external_api(dataframe: pd.DataFrame, latitude_col: str, longitude_col: str, date_col: str) -> pd.DataFrame:
     """
-    Main function to orchestrate the enrichment of the base dataframe with external API data.
+    DEPRECATED: This monolithic function is replaced by the per-API approach.
+    Use process_in_chunks() together with extract_elevation_features(),
+    extract_weather_features(), extract_soilgrids_features(), and
+    extract_osm_features() instead. See notebook 02-external_data_extraction.ipynb.
     """
-    enriched_df = dataframe.copy()
-    
-    # 1. API: Elevation
-    enriched_df['elevation_meters'] = enriched_df.apply(lambda row: fetch_elevation(row[latitude_col], row[longitude_col]), axis=1)
+    import warnings
+    warnings.warn(
+        "enrich_dataset_with_external_api() is deprecated. "
+        "Use per-API extraction functions with process_in_chunks() instead. "
+        "See notebook 02-external_data_extraction.ipynb.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return dataframe
 
-    # 2. API: Weather
-    weather_data = enriched_df.apply(lambda row: fetch_historical_weather(row[latitude_col], row[longitude_col], str(row[date_col])), axis=1)
-    enriched_df = pd.concat([enriched_df, pd.DataFrame(weather_data.tolist(), index=enriched_df.index)], axis=1)
 
-    # 3. API: SoilGrids
-    soil_data = enriched_df.apply(lambda row: fetch_soilgrids_properties(row[latitude_col], row[longitude_col]), axis=1)
-    enriched_df = pd.concat([enriched_df, pd.DataFrame(soil_data.tolist(), index=enriched_df.index)], axis=1)
+def process_in_chunks(df: pd.DataFrame, process_func, chunk_size: int = 50, desc: str = "Processing") -> pd.DataFrame:
+    """Process dataframe in chunks with progress tracking to avoid memory issues."""
+    results = []
+    total_chunks = (len(df) + chunk_size - 1) // chunk_size
+    for i in range(0, len(df), chunk_size):
+        chunk = df.iloc[i:i + chunk_size]
+        chunk_result = process_func(chunk)
+        results.append(chunk_result)
+        print(f"  [{desc}] Chunk {i // chunk_size + 1}/{total_chunks} done ({min(i + chunk_size, len(df))}/{len(df)} rows)")
+    return pd.concat(results, ignore_index=True)
 
-    # 4. API: OpenStreetMap Pollution
-    osm_data = enriched_df.apply(lambda row: fetch_osm_pollution_counts(row[latitude_col], row[longitude_col], radius_m=1000), axis=1)
-    enriched_df = pd.concat([enriched_df, pd.DataFrame(osm_data.tolist(), index=enriched_df.index)], axis=1)
-    
-    # #5. API: SENTINEL
-    # sentinel_data = enriched_df.apply(lambda row: fetch_sentinel2_features(row[latitude_col], row[longitude_col], str(row[date_col].date())), axis=1)
-    # enriched_df = pd.concat([enriched_df, pd.DataFrame(sentinel_data.tolist(), index=enriched_df.index)], axis=1)
 
-    # 6. Static: Worldpop
-    enriched_df['worldpop_density_1km'] = enriched_df.apply(
-        lambda row: fetch_static_raster_value(row[latitude_col], row[longitude_col], "worldpop", 1000), axis=1)
+def extract_elevation_features(df: pd.DataFrame, lat_col: str = 'Latitude', lon_col: str = 'Longitude') -> pd.DataFrame:
+    """Extract elevation for each unique coordinate. Returns df with keys + elevation_meters."""
+    coords = df[[lat_col, lon_col]].drop_duplicates().copy()
+    coords['elevation_meters'] = coords.apply(
+        lambda r: fetch_elevation(r[lat_col], r[lon_col]), axis=1
+    )
+    return df[[lat_col, lon_col]].merge(coords, on=[lat_col, lon_col], how='left')
 
-    # 7. Static: SANLC (2022 & 2020)
-    enriched_df['sanlc2022_class_1km'] = enriched_df.apply(
-        lambda row: fetch_mapped_sanlc_class(row[latitude_col], row[longitude_col], "sanlc2022", 1000), axis=1)
-    enriched_df['sanlc2020_class_1km'] = enriched_df.apply(
-        lambda row: fetch_mapped_sanlc_class(row[latitude_col], row[longitude_col], "sanlc2020", 1000), axis=1)
-        
-    # 8. Static: HydroATLAS & RiverATLAS
-    hydro = enriched_df.apply(lambda r: fetch_hydroatlas_attributes(r[latitude_col], r[longitude_col]), axis=1)
-    enriched_df = pd.concat([enriched_df, pd.DataFrame(hydro.tolist(), index=enriched_df.index)], axis=1)
-    
-    river = enriched_df.apply(lambda r: fetch_riveratlas_attributes(r[latitude_col], r[longitude_col]), axis=1)
-    enriched_df = pd.concat([enriched_df, pd.DataFrame(river.tolist(), index=enriched_df.index)], axis=1)
-    
-    return enriched_df
+
+def extract_weather_features(df: pd.DataFrame, lat_col: str = 'Latitude', lon_col: str = 'Longitude', date_col: str = 'Sample_Date') -> pd.DataFrame:
+    """Extract weather features for each unique coordinate+date. Returns df with keys + total_precipitation, average_wind_speed."""
+    result = df[[lat_col, lon_col, date_col]].copy()
+    weather_data = result.apply(
+        lambda r: fetch_historical_weather(r[lat_col], r[lon_col], str(r[date_col])), axis=1
+    )
+    return pd.concat([result, pd.DataFrame(weather_data.tolist(), index=result.index)], axis=1)
+
+
+def extract_soilgrids_features(df: pd.DataFrame, lat_col: str = 'Latitude', lon_col: str = 'Longitude') -> pd.DataFrame:
+    """Extract soil properties for each unique coordinate. Returns df with keys + soil_phh2o_mean_0_5cm, soil_clay_mean_0_5cm, etc."""
+    coords = df[[lat_col, lon_col]].drop_duplicates().copy()
+    soil_data = coords.apply(
+        lambda r: fetch_soilgrids_properties(r[lat_col], r[lon_col]), axis=1
+    )
+    coords = pd.concat([coords, pd.DataFrame(soil_data.tolist(), index=coords.index)], axis=1)
+    return df[[lat_col, lon_col]].merge(coords, on=[lat_col, lon_col], how='left')
+
+
+def extract_osm_features(df: pd.DataFrame, lat_col: str = 'Latitude', lon_col: str = 'Longitude') -> pd.DataFrame:
+    """Extract OSM pollution counts for each unique coordinate. Returns df with keys + mine_count, wastewater_count, farmland_count, road_count."""
+    coords = df[[lat_col, lon_col]].drop_duplicates().copy()
+    osm_data = coords.apply(
+        lambda r: fetch_osm_pollution_counts(r[lat_col], r[lon_col], radius_m=1000), axis=1
+    )
+    coords = pd.concat([coords, pd.DataFrame(osm_data.tolist(), index=coords.index)], axis=1)
+    return df[[lat_col, lon_col]].merge(coords, on=[lat_col, lon_col], how='left')
+
+
+def save_and_upload_to_stage(df: pd.DataFrame, file_name: str, session, stage_path: str = "@EXTERNAL_DATA_STAGE") -> None:
+    """Save dataframe as parquet to /tmp/ and upload to Snowflake Stage."""
+    local_path = f"/tmp/{file_name}"
+    df.to_parquet(local_path, index=False, engine='pyarrow', compression='snappy')
+    session.file.put(f"file://{local_path}", stage_path, auto_compress=False, overwrite=True)
+    print(f"✓ {file_name} uploaded to {stage_path} ({len(df)} rows, {os.path.getsize(local_path) / 1024:.1f} KB)")
