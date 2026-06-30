@@ -167,15 +167,19 @@ def fetch_osm_pollution_counts(latitude: float, longitude: float, radius_m: int 
 #         print(f"Sentinel-2 STAC Error for ({latitude}, {longitude}): {e}")
 #         return default_metrics
 
+# Configurable base path — set this to your Kaggle working directory
+# e.g., STATIC_DATA_BASE = "/kaggle/working/" or "/kaggle/input/..."
+STATIC_DATA_BASE = os.environ.get("STATIC_DATA_BASE", "/kaggle/working/")
+
 @lru_cache(maxsize=128)
-def _get_loaded_static_layer(layer: str):
-    base = "/tmp/"
+def _get_loaded_static_layer(layer: str, base: str = None):
+    base = base or STATIC_DATA_BASE
     try:
-        if layer == "worldpop":    return rasterio.open(base + "zaf_pop_2025_CN_100m_R2025A_v1.tif")
-        if layer == "sanlc2022":   return rasterio.open(base + "SA_NLC_2022_ALBERS.tif")
-        if layer == "sanlc2020":   return rasterio.open(base + "SA_NLC_2020_ALBERS.tif")
-        if layer == "hydroatlas":  return gpd.read_parquet(base + "BasinATLAS_v10_lev12.parquet")
-        if layer == "riveratlas":  return gpd.read_parquet(base + "RiverATLAS_Data_v10.parquet")
+        if layer == "worldpop":    return rasterio.open(os.path.join(base, "zaf_pop_2025_CN_100m_R2025A_v1.tif"))
+        if layer == "sanlc2022":   return rasterio.open(os.path.join(base, "SA_NLC_2022_ALBERS.tif"))
+        if layer == "sanlc2020":   return rasterio.open(os.path.join(base, "SA_NLC_2020_ALBERS.tif"))
+        if layer == "hydroatlas":  return gpd.read_parquet(os.path.join(base, "BasinATLAS_v10_lev12.parquet"))
+        if layer == "riveratlas":  return gpd.read_parquet(os.path.join(base, "RiverATLAS_Data_v10.parquet"))
     except Exception as e:
         print(f"Load error {layer}: {e}")
         return None
@@ -201,7 +205,7 @@ def _load_raster_attribute_table(layer_identifier: str) -> Dict[float, str]:
     Loads the Value Attribute Table (VAT) DBF file and returns a mapping dictionary.
     Implements caching to prevent redundant I/O operations.
     """
-    base_directory = "/tmp/"
+    base_directory = STATIC_DATA_BASE
     file_mapping = {
         "sanlc2022": "SA_NLC_2022_ALBERS.tif.vat.dbf",
         "sanlc2020": "SA_NLC_2020_ALBERS.tif.vat.dbf"
@@ -344,9 +348,20 @@ def extract_osm_features(df: pd.DataFrame, lat_col: str = 'Latitude', lon_col: s
     return df[[lat_col, lon_col]].merge(coords, on=[lat_col, lon_col], how='left')
 
 
-def save_and_upload_to_stage(df: pd.DataFrame, file_name: str, session, stage_path: str = "@EXTERNAL_DATA_STAGE") -> None:
-    """Save dataframe as parquet to /tmp/ and upload to Snowflake Stage."""
-    local_path = f"/tmp/{file_name}"
+def save_checkpoint(df: pd.DataFrame, file_name: str, output_dir: str = "/kaggle/working/checkpoints") -> str:
+    """Save dataframe as parquet checkpoint. For Kaggle restartability."""
+    os.makedirs(output_dir, exist_ok=True)
+    local_path = os.path.join(output_dir, file_name)
     df.to_parquet(local_path, index=False, engine='pyarrow', compression='snappy')
-    session.file.put(f"file://{local_path}", stage_path, auto_compress=False, overwrite=True)
-    print(f"✓ {file_name} uploaded to {stage_path} ({len(df)} rows, {os.path.getsize(local_path) / 1024:.1f} KB)")
+    print(f"✓ Checkpoint saved: {file_name} ({len(df)} rows, {os.path.getsize(local_path) / 1024:.1f} KB)")
+    return local_path
+
+
+def load_checkpoint(file_name: str, output_dir: str = "/kaggle/working/checkpoints") -> Optional[pd.DataFrame]:
+    """Load a checkpoint if it exists. Returns None if not found."""
+    local_path = os.path.join(output_dir, file_name)
+    if os.path.exists(local_path):
+        df = pd.read_parquet(local_path)
+        print(f"✓ Checkpoint loaded: {file_name} ({len(df)} rows)")
+        return df
+    return None
