@@ -20,3 +20,4 @@ mlruns/
 data/raw/*.csv
 data/external/*.csv
 data/processed/*.csv
+docs-archive

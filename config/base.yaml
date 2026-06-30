@@ -1,37 +1,106 @@
 project:
-  name: "new_ml_project"
-  version: "0.0.1"
+  name: "ey-water-quality-prediction"
+  version: "2.0.0"
+  description: "Predicting water quality parameters for South African rivers (EY AI Data Challenge 2026)"
 
-paths:
-  # Path relatif dari root project
-  raw_data: "data/01-raw/dataset.csv"
-  processed_data: "data/02-preprocessed/"
-  artifacts: "models/artifacts/"
+seed: 42
 
+# === Target Variables ===
+targets:
+  - "Total Alkalinity (mg/L CaCO3)"
+  - "Electrical Conductance (mS/m)"
+  - "Dissolved Reactive Phosphorus (ug/L)"
+
+# === Column Roles ===
 schema:
-  target: "target_variable" 
-  
-  drop_cols: 
-    - "id"
-    - "uuid"
-  
-  features_numeric: [] 
-  features_categorical: []  
+  station_col: "GEMS Station Number"
+  lat_col: "Latitude"
+  lon_col: "Longitude"
+  date_col: "Sample Date"
+  river_col: "River Name"
 
-pipeline:
-  feature_engineering:
-    enable: true
+  # Columns to exclude from features (metadata / identifiers)
+  meta_cols:
+    - "GEMS Station Number"
+    - "Latitude"
+    - "Longitude"
+    - "Sample Date"
+    - "River Name"
 
-  preprocessing:
+# === Kaggle Paths ===
+paths:
+  kaggle_input: "/kaggle/input/ey-water-quality-data"
+  kaggle_working: "/kaggle/working"
+  checkpoints: "/kaggle/working/checkpoints"
+
+# === Cross-Validation ===
+cv:
+  strategy: "leave_station_group_out"  # Spatial CV — simulates unseen locations
+  n_splits: 10
+
+# === Feature Engineering ===
+feature_engineering:
+  temporal:
     enable: true
-    
-    imputation:
-      numeric: "median"        # mean, median, constant
-      categorical: "most_frequent" # most_frequent, constant
-    
-    scaling:
-      enable: true
-      method: "standard" # standard, minmax, robust
-    
-    encoding:
-      method: "onehot" # onehot, ordinal
+    cyclical_encoding: true  # sin/cos for month, day_of_year
+
+  interactions:
+    enable: true
+    features:
+      - "runoff_proxy"          # precip × slope
+      - "agri_phosphorus_load"  # farmland_pct × precip
+      - "dilution_factor"       # discharge × upstream_area
+      - "weathering_index"      # soil_pH × elevation
+      - "clay_organic_interaction"
+
+  log_transform:
+    enable: true
+    skew_threshold: 2.0
+
+  buffer_radii_m: [1000, 5000, 10000]  # Expand to [1000, 5000, 10000, 15000, 20000] in later experiments
+
+# === Feature Selection ===
+feature_selection:
+  method: "rfecv"  # Recursive Feature Elimination with CV
+  estimator: "random_forest"
+  step: 5
+  min_features: 10
+  per_target: true  # Separate feature set per target
+
+# === Modeling ===
+modeling:
+  # Default baseline strategy: separate models per target
+  strategy: "separate"  # Options: "separate", "multioutput", "regressor_chain"
+
+  baseline_models:
+    - "ridge"
+    - "random_forest"
+    - "xgboost"
+
+  advanced_models:
+    - "xgboost"
+    - "lightgbm"
+    - "catboost"
+    - "extra_trees"
+
+  optuna:
+    n_trials: 100  # Increase to 200-300 for final run
+    timeout_seconds: 3600  # 1 hour max per target
+
+# === Ensemble ===
+ensemble:
+  meta_learner: "kernel_ridge"  # KernelRidge(poly, degree=2) — from winners
+  meta_params:
+    alpha: 0.00001
+    kernel: "poly"
+    degree: 2
+    coef0: 0.25
+  scale_oof: true
+
+# === Preprocessing ===
+preprocessing:
+  imputation:
+    numeric: "median"
+  scaling:
+    enable: true
+    method: "standard"
