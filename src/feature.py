@@ -72,7 +72,7 @@ def prepare_model_inputs(dataframe: pd.DataFrame, columns_to_drop: List[str]) ->
 # Temporal Feature Engineering
 # ===========================================================================
 
-def add_temporal_features(df: pd.DataFrame, date_col: str = 'Sample_Date') -> pd.DataFrame:
+def add_temporal_features(df: pd.DataFrame, date_col: str = 'Sample Date') -> pd.DataFrame:
     """
     Add cyclical temporal features from a date column.
     
