@@ -20,4 +20,14 @@
 
 ## Log Entries
 
-_No experiments logged yet. Entries will be appended as experiments are run._
+### 2026-07-02: Modularization of Kaggle Pipeline for Background Execution
+- **Task:** Split raw data extraction and heavy downloads into individual notebooks.
+- **Added Notebooks:**
+  - [01f_extract_hydroatlas.ipynb](file:///Users/tri/Documents/code/water-quality-prediction/notebook/kaggle/01f_extract_hydroatlas.ipynb): downloads BasinATLAS, intersects stations, maps UP_AREA, POP, AG, SLOPE.
+  - [01g_extract_riveratlas.ipynb](file:///Users/tri/Documents/code/water-quality-prediction/notebook/kaggle/01g_extract_riveratlas.ipynb): downloads RiverATLAS, performs metric `sjoin_nearest` for discharge, riv order, river width, distance.
+  - [01h_extract_sanlc.ipynb](file:///Users/tri/Documents/code/water-quality-prediction/notebook/kaggle/01h_extract_sanlc.ipynb): processes manual SANLC 2020 & 2022 land cover rasters.
+  - [01i_extract_worldpop.ipynb](file:///Users/tri/Documents/code/water-quality-prediction/notebook/kaggle/01i_extract_worldpop.ipynb): downloads and masks global 100m population density raster.
+  - [01j_extract_sentinel.ipynb](file:///Users/tri/Documents/code/water-quality-prediction/notebook/kaggle/01j_extract_sentinel.ipynb): queries Planetary Computer STAC for 2020 climatology to extract high-res (10m) bands and calculate NDWI, EVI, and Albedo proxies per station.
+- **Updated Notebooks:**
+  - [01e_merge_external.ipynb](file:///Users/tri/Documents/code/water-quality-prediction/notebook/kaggle/01e_merge_external.ipynb): integrated all 9 datasets (including Sentinel-2) and added `find_file` auto-path logic for Kaggle inputs. The merge flow is structured batch-by-batch, outputting intermediate datasets (`train_enriched_exp2.parquet` / `val_enriched_exp2.parquet` for Batch 2) and final datasets (`train_enriched.parquet` / `val_enriched.parquet` for Batch 3 & 5) to align with the experiment plan.
+- **Reasoning:** Modular notebooks allow running heavy GIS extractions in Kaggle background sessions in parallel, preventing session timeout and avoiding exceeding the 20GB disk limit (by deleting heavy files after station-level query). Gradual batch merging ensures data reproducibility matching the exact experiment configurations. Sentinel-2 is processed using a climatological approach (median over year 2020) to solve historical data limitations (since Sentinel-2 was launched after the water quality sampling dates).

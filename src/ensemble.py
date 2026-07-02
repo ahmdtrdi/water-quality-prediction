@@ -68,8 +68,8 @@ class OOFStackingEnsemble(BaseEstimator, RegressorMixin):
         oof_matrix = np.zeros((n_samples, n_models))
         
         # Identify feature columns (exclude metadata)
-        meta_cols = ['GEMS Station Number', 'Latitude', 'Longitude', 'Sample_Date', 
-                     'River Name', 'Sample Date']
+        meta_cols = ['station_id', 'Latitude', 'Longitude', 'Sample Date', 
+                     'Sample Date']
         feature_cols = [c for c in X.columns if c not in meta_cols]
         
         for model_idx, (name, model) in enumerate(self.base_models):
@@ -103,8 +103,8 @@ class OOFStackingEnsemble(BaseEstimator, RegressorMixin):
         Generate predictions by averaging base model predictions across folds,
         then applying the meta-learner.
         """
-        meta_cols = ['GEMS Station Number', 'Latitude', 'Longitude', 'Sample_Date', 
-                     'River Name', 'Sample Date']
+        meta_cols = ['station_id', 'Latitude', 'Longitude', 'Sample Date', 
+                     'Sample Date']
         feature_cols = [c for c in X.columns if c not in meta_cols]
         
         n_models = len(self.base_models)
@@ -126,8 +126,8 @@ class OOFStackingEnsemble(BaseEstimator, RegressorMixin):
         """Get per-base-model OOF R² scores for diagnostics."""
         from sklearn.metrics import r2_score
         
-        meta_cols = ['GEMS Station Number', 'Latitude', 'Longitude', 'Sample_Date', 
-                     'River Name', 'Sample Date']
+        meta_cols = ['station_id', 'Latitude', 'Longitude', 'Sample Date', 
+                     'Sample Date']
         feature_cols = [c for c in X.columns if c not in meta_cols]
         
         scores = {}

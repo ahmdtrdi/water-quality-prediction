@@ -30,13 +30,13 @@ class LeaveStationGroupOut(BaseCrossValidator):
     ----------
     n_splits : int, default=10
         Number of folds. Stations are distributed across folds as evenly as possible.
-    station_col : str, default='GEMS Station Number'
+    station_col : str, default='station_id'
         Column name containing station identifiers.
     random_state : int, default=42
         Random seed for reproducible fold assignment.
     """
     
-    def __init__(self, n_splits: int = 10, station_col: str = 'GEMS Station Number', 
+    def __init__(self, n_splits: int = 10, station_col: str = 'station_id', 
                  random_state: int = 42):
         self.n_splits = n_splits
         self.station_col = station_col
@@ -201,8 +201,7 @@ def evaluate_spatial_cv(
     oof_preds = np.full(len(X), np.nan) if return_predictions else None
     
     # Identify columns to exclude from features (metadata columns)
-    meta_cols = ['GEMS Station Number', 'Latitude', 'Longitude', 'Sample_Date', 
-                 'River Name', 'Sample Date']
+    meta_cols = ['station_id', 'Latitude', 'Longitude', 'Sample Date']
     feature_cols = [c for c in X.columns if c not in meta_cols]
     
     for fold_idx, (train_idx, test_idx) in enumerate(cv.split(X)):

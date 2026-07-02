@@ -7,25 +7,28 @@ seed: 42
 
 # === Target Variables ===
 targets:
-  - "Total Alkalinity (mg/L CaCO3)"
-  - "Electrical Conductance (mS/m)"
-  - "Dissolved Reactive Phosphorus (ug/L)"
+  - "Total Alkalinity"
+  - "Electrical Conductance"
+  - "Dissolved Reactive Phosphorus"
 
 # === Column Roles ===
+# NOTE: Raw data has NO station ID column.
+# Stations are identified by unique (Latitude, Longitude) pairs.
+# We create a synthetic 'station_id' in notebook 00.
 schema:
-  station_col: "GEMS Station Number"
+  station_col: "station_id"   # synthetic — created from lat_lon
   lat_col: "Latitude"
   lon_col: "Longitude"
   date_col: "Sample Date"
-  river_col: "River Name"
+  date_format: "%d-%m-%Y"     # DD-MM-YYYY
 
   # Columns to exclude from features (metadata / identifiers)
   meta_cols:
-    - "GEMS Station Number"
+    - "station_id"
     - "Latitude"
     - "Longitude"
     - "Sample Date"
-    - "River Name"
+
 
 # === Kaggle Paths ===
 paths:
